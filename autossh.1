@@ -17,7 +17,7 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.\" $Id: autossh.1,v 1.22 2011/10/12 20:29:22 harding Exp $
+.\" $Id: autossh.1,v 1.23 2015/02/10 04:31:16 harding Exp $
 .\"
 .Dd Jul 20, 2004
 .Dt AUTOSSH 1
@@ -256,9 +256,10 @@ different than the path compiled in.
 Write autossh pid to specified file.
 .It Ev AUTOSSH_POLL
 Specifies the connection poll time in seconds; default is 600 seconds.
-If the poll time is less than twice the network timeouts (default 15
-seconds) the network timeouts will be adjusted downward to 1/2 the
-poll time.
+Unless AUTOSSH_FIRST_POLL is used, the first poll time will 
+set to match the poll time. If the poll time is less than twice the 
+network timeouts (default 15 seconds) the network timeouts will be 
+adjusted downward to 1/2 the poll time.
 .It Ev AUTOSSH_PORT
 Sets the connection monitoring port. Mostly in case ssh appropriates
 -M at some time. But because of this possible use, AUTOSSH_PORT

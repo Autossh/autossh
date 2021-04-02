@@ -1,8 +1,8 @@
-# $Id: Makefile.in,v 1.6 2014/09/10 01:59:01 harding Exp $
+# $Id: Makefile.in,v 1.7 2015/02/10 04:31:16 harding Exp $
 #
 # @configure_input@
 
-VER=		1.4d
+VER=		1.4e
 
 SSH=		@path_ssh@
 

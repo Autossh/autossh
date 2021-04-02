@@ -194,6 +194,9 @@ The following environment variables can be set:
 			    it is different than that compiled in.
     AUTOSSH_PIDFILE	  - write autossh pid to specified file.
     AUTOSSH_POLL	  - poll time in seconds; default is 600.
+    			    Changing this will also change the first
+			    poll time, unless AUTOSSH_FIRST_POLL is
+			    used to set it to something different.
 			    If the poll time is less than twice the 
 			    network timeouts (default 15 seconds) the 
 			    network timeouts will be adjusted downward 

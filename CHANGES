@@ -1,4 +1,10 @@
 
+Version 1.4e
+- By default, changing the poll time should change the first poll
+  time to match. Only have different times if AUTOSSH_FIRST_POLL
+  is explicitly set. Jerry Xie forwarded on change request from
+  Ubuntu bug forums.
+
 Version 1.4d
 
 - call daemon() before opening any sockets. Problem discovered and
