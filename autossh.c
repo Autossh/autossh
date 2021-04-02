@@ -4,7 +4,7 @@
  *
  * 	From the example of rstunnel.
  *
- * Copyright (c) Carson Harding, 2002,2003,2004.
+ * Copyright (c) Carson Harding, 2002-2006.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,11 +23,15 @@
  *
  */
 
+#include "config.h"
+
 #include <sys/types.h>
 #include <sys/time.h>
-#if defined(__APPLE__) && !defined(_BSD_SOCKLEN_T)
+
+#ifndef HAVE_SOCKLEN_T
 typedef int32_t socklen_t;
 #endif
+
 #include <sys/socket.h>
 #include <sys/utsname.h>
 #include <netinet/in.h>
@@ -47,42 +51,40 @@ typedef int32_t socklen_t;
 #include <time.h>
 #include <errno.h>
 
-#if defined(__APPLE__)
-#include "fakepoll.h"
+#ifndef HAVE_POLL
+#  ifdef HAVE_SELECT
+#    include "fakepoll.h"
+#  else
+#    error "System lacks both select() and poll()!"
+#  endif
 #else
-#include <poll.h>
+#  include <poll.h>
 #endif
 
 #ifndef __attribute__
-# if __GNUC__ < 2 || (__GNUC__ == 2 && __GNUC_MINOR__ < 8) || __STRICT_ANSI__
-#  define __attribute__(x)
-# endif
+#  if __GNUC__ < 2 || (__GNUC__ == 2 && __GNUC_MINOR__ < 8) || __STRICT_ANSI__
+#    define __attribute__(x)
+#  endif
 #endif
 
-#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__)
-#define HAVE_SETPROCTITLE
-#endif
-
-#if defined(__svr4__) && !defined(__aix__)
 #ifndef _PATH_DEVNULL
-#define _PATH_DEVNULL "/dev/null"
-#endif
-#include "daemon.h"
-#else
-#define HAVE_DAEMON_FUNC
+#  define _PATH_DEVNULL "/dev/null"
 #endif
 
-#if !defined(__svr4__) && !defined(__aix__)
+#ifndef HAVE_DAEMON
+#  include "daemon.h"
+#endif
+
+#ifdef HAVE___PROGNAME
 extern char *__progname;
 #else
 char *__progname;
-#define u_int16_t uint16_t
 #endif
 
-const char *rcsid = "$Id: autossh.c,v 1.65 2005/03/23 01:47:01 harding Exp $";
+const char *rcsid = "$Id: autossh.c,v 1.74 2006/05/21 03:33:00 harding Exp $";
 
 #ifndef SSH_PATH
-#define SSH_PATH "/usr/bin/ssh"
+#  define SSH_PATH "/usr/bin/ssh"
 #endif
 
 #define POLL_TIME	600	/* 10 minutes default */
@@ -90,6 +92,7 @@ const char *rcsid = "$Id: autossh.c,v 1.65 2005/03/23 01:47:01 harding Exp $";
 #define TIMEO_NET	15000	/* poll on accept() and io (msecs) */
 #define MAX_CONN_TRIES	3	/* how many attempts */
 #define MAX_START	(-1)	/* max # of runs; <0 == forever */
+#define MAX_MESSAGE	64	/* max length of message we can add */
 
 #define P_CONTINUE	0	/* continue monitoring */
 #define P_RESTART	1	/* restart ssh process */
@@ -100,7 +103,7 @@ const char *rcsid = "$Id: autossh.c,v 1.65 2005/03/23 01:47:01 harding Exp $";
 
 #define NO_RD_SOCK	-2	/* magic flag for echo: no read socket */
 
-#define	OPTION_STRING "M:V1246ab:c:e:fgi:kl:m:no:p:qstvxACD:F:I:L:NPR:TXY"
+#define	OPTION_STRING "M:V1246ab:c:e:fgi:kl:m:no:p:qstvw:xACD:F:I:L:NO:PR:S:TXY"
 
 int	logtype  = L_SYSLOG;	/* default log to syslog */
 int	loglevel = LOG_INFO;	/* default loglevel */
@@ -112,7 +115,11 @@ char	readp[16];		/* read port as string */
 char	*echop;			/* echo port as string */
 char	*mhost = "127.0.0.1";	/* host in port forwards */
 char	*env_port;		/* port spec'd in environment */
+char	*echo_message = "";	/* message to append to echo string */
+char	*pid_file_name;		/* path to pid file */
+int	pid_file_created;	/* we have created pid file */
 int	poll_time = POLL_TIME;	/* default connection poll time */
+int	first_poll_time = POLL_TIME; /* initial connection poll time */
 double	gate_time = GATE_TIME;	/* time to "make it out of the gate" */
 int	max_start = MAX_START;  /* how many times to run (default no limit) */
 int	net_timeout = TIMEO_NET; /* timeout on network data */
@@ -146,7 +153,7 @@ int	conn_test(int sock, char *host, char *write_port);
 int	conn_poll_for_accept(int sock, struct pollfd *pfd);
 int	conn_send_and_receive(char *rp, char *wp, size_t len, 
 	    struct pollfd *pfd, int ntopoll);
-#ifdef HAVE_NO_ADDRINFO
+#ifndef HAVE_ADDRINFO
 void	conn_addr(char *host, char *port, struct sockaddr_in *resp);
 #else
 void	conn_addr(char *host,  char *port, struct addrinfo **resp);
@@ -154,6 +161,7 @@ void	conn_addr(char *host,  char *port, struct addrinfo **resp);
 int	conn_listen(char *host,  char *port);
 int	conn_remote(char *host,  char *port);
 void	grace_time(time_t last_start);
+void	unlink_pid_file(void);
 void	errlog(int level, char *fmt, ...)
 	    __attribute__ ((__format__ (__printf__, 2, 3)));
 void	xerrlog(int level, char *fmt, ...)
@@ -161,15 +169,12 @@ void	xerrlog(int level, char *fmt, ...)
 void	doerrlog(int level, char *fmt, va_list ap);
 char	*timestr(void);
 void	sig_catch(int sig);
-#if !defined(HAVE_DAEMON_FUNC)
-int	daemon(int nochdir, int noclose);
-#endif
 
 void
 usage(int code)
 {
 	fprintf(code ? stderr : stdout,
-	    "usage: %s [-M monitor_port[:echo_port]] [-f] [SSH_OPTIONS]\n", 
+	    "usage: %s [-V] [-M monitor_port[:echo_port]] [-f] [SSH_OPTIONS]\n", 
 	    __progname);
 	if (code) {
 		fprintf(stderr, "\n");
@@ -185,44 +190,55 @@ usage(int code)
 		    "    -f run in background (autossh handles this, and"
 		    " does not\n"
 		    "       pass it to ssh.)\n");
+		fprintf(stderr, 
+		    "    -V print autossh version and exit.\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Environment variables are:\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_GATETIME  "
+		    "    AUTOSSH_GATETIME   "
 		    "- how long must an ssh session be established\n"
-		    "                      "
+		    "                       "
 		    "  before we decide it really was established\n"
-		    "                      "
+		    "                       "
 		    "  (in seconds)\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_LOGFILE   "
+		    "    AUTOSSH_LOGFILE    "
 		    "- file to log to (default is to use the syslog\n"
-		    "                      "
+		    "                       "
 		    "  facility)\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_LOGLEVEL  "
+		    "    AUTOSSH_LOGLEVEL   "
 		    "- level of log verbosity\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_MAXSTART  "
+		    "    AUTOSSH_MAXSTART   "
 		    "- max times to restart (default is no limit)\n");
+		fprintf(stderr, 
+		    "    AUTOSSH_MESSAGE    "
+		    "- message to append to echo string (max 64 bytes)\n");
 #if defined(__CYGWIN__)
 		fprintf(stderr, 
-		    "    AUTOSSH_NTSERVICE "
+		    "    AUTOSSH_NTSERVICE  "
 		    "- tweak some things for running under cygrunsrv\n");
 #endif
 		fprintf(stderr, 
-		    "    AUTOSSH_PATH      "
+		    "    AUTOSSH_PATH       "
 		    "- path to ssh if not default\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_POLL      "
+		    "    AUTOSSH_PIDFILE    "
+		    "- write pid to this file\n");
+		fprintf(stderr, 
+		    "    AUTOSSH_POLL       "
 		    "- how often to check the connection (seconds)\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_PORT      "
+		    "    AUTOSSH_FIRST_POLL "
+		    "- time before first connection check (seconds)\n");
+		fprintf(stderr, 
+		    "    AUTOSSH_PORT       "
 		    "- port to use for monitor connection\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_DEBUG     "
+		    "    AUTOSSH_DEBUG      "
 		    "- turn logging to maximum verbosity and log to\n"
-		    "                      "
+		    "                       "
 		    "  stderr\n");
 		fprintf(stderr, "\n");
 	}
@@ -236,8 +252,9 @@ main(int argc, char **argv)
 	int	n;
 	int	ch;
 	char	*s;
-	int	wp, rp, ep;
+	int	wp, rp, ep = 0;
 	char	wmbuf[256], rmbuf[256];
+	FILE	*pid_file;
 
 	int	sock = -1;
 	int	done_fwds = 0;
@@ -247,7 +264,7 @@ main(int argc, char **argv)
 	int	sawoptionn = 0;
 #endif
 
-#if defined(__svr4__) || defined(__aix__)
+#ifndef HAVE___PROGNAME
 	__progname = "autossh";
 #endif	
 
@@ -301,11 +318,7 @@ main(int argc, char **argv)
 		usage(1);
 
 	if (logtype & L_SYSLOG)
-#if !defined(__svr4__) && !defined(__aix__)
 		openlog(__progname, LOG_PID|syslog_perror, LOG_USER);
-#else
-		openlog(__progname, LOG_PID, LOG_USER);
-#endif
 
 	/*
 	 * Check for echo port
@@ -395,7 +408,7 @@ main(int argc, char **argv)
 				add_arg(rmbuf);
 			}
 			done_fwds = 1;
-		} else if (argv[i][0] == '-' && argv[i][1] == 'M') {
+		} else if (!sawargstop && argv[i][0] == '-' && argv[i][1] == 'M') {
 			if (argv[i][2] == '\0')
 				i++;
 			if (wp && !done_fwds) {
@@ -433,6 +446,21 @@ main(int argc, char **argv)
 			xerrlog(LOG_ERR, "run as daemon failed: %s", 
 			    strerror(errno));
 		}
+	}
+
+	if (pid_file_name) {
+		pid_file = fopen(pid_file_name, s);
+		if (!pid_file) {
+			xerrlog(LOG_ERR, "cannot open pid file \"%s\": %s",
+			    pid_file_name, strerror(errno));
+		}
+		pid_file_created = 1;
+		atexit(unlink_pid_file);
+		if (fprintf(pid_file, "%d\n", (int)getpid()) == 0)
+			xerrlog(LOG_ERR, "write failed to pid file \"%s\": %s",
+			    pid_file_name, strerror(errno));
+		fflush(pid_file);
+		fclose(pid_file);
 	}
 
 	ssh_run(sock, newav);
@@ -492,10 +520,11 @@ void
 strip_arg(char *arg, char ch, char *opts)
 {
 	char *f, *o;
+	size_t len;
+	
 
 	if (arg[0] == '-' && arg[1] != '\0') {
-		f = arg;
-		for (f = arg; *f != '\0'; f++) {
+		for (len = strlen(arg), f = arg; *f != '\0'; f++, len--) {
 			/* 
 			 * If f in option string and next char is ':' then
 			 * what follows is a parameter to the flag, and
@@ -510,7 +539,7 @@ strip_arg(char *arg, char ch, char *opts)
 					return; 
 			}
 			if (*f == ch)
-				(void)strcpy(f, f+1);
+				(void)memmove(f, f+1, len); 
 		}
 		/* left with "-" alone? then truncate */
 		if (arg[1] == '\0')
@@ -533,9 +562,10 @@ get_env_args(void)
 		ssh_path = s;
 
 	if ((s = getenv("AUTOSSH_DEBUG")) != NULL) {
-#if !defined(__svr4__) && !defined(__aix__)
+#ifdef HAVE_LOG_PERROR
 		syslog_perror = LOG_PERROR;
 #else
+		syslog_perror = 0;
 		logtype |= L_FILELOG;
 		flog = stderr;
 #endif
@@ -545,6 +575,15 @@ get_env_args(void)
 		if (*s == '\0' || *t != '\0' ||
 		    loglevel < LOG_EMERG || loglevel > LOG_DEBUG)
 			xerrlog(LOG_ERR, "invalid log level \"%s\"", s);
+	}
+
+	if ((s = getenv("AUTOSSH_FIRST_POLL")) != NULL) {
+		first_poll_time = strtoul(s, &t, 0);
+		if (*s == '\0' || first_poll_time == 0 || *t != '\0' )
+			xerrlog(LOG_ERR, 
+			    "invalid first poll time \"%s\"", s);
+		if (first_poll_time <= 0)
+			first_poll_time = POLL_TIME;
 	}
 
 	if ((s = getenv("AUTOSSH_POLL")) != NULL) {
@@ -568,9 +607,22 @@ get_env_args(void)
 			xerrlog(LOG_ERR, "invalid max start number \"%s\"", s);
 	}
 
+	if ((s = getenv("AUTOSSH_MESSAGE")) != NULL) {
+		if (*s != '\0')
+			echo_message = s;
+		if (strlen(echo_message) > MAX_MESSAGE)
+			xerrlog(LOG_ERR, "echo message may only be %d bytes long",
+			    MAX_MESSAGE);
+	} 
+
+
 	if ((s = getenv("AUTOSSH_PORT")) != NULL)
 		if (*s != '\0')
 			env_port = s;
+
+	if ((s = getenv("AUTOSSH_PIDFILE")) != NULL)
+		if (*s != '\0')
+			pid_file_name = s;
 
 #if defined(__CYGWIN__)
 	if ((s = getenv("AUTOSSH_NTSERVICE")) != NULL) {
@@ -673,8 +725,9 @@ ssh_watch(int sock)
 	int	r;
 	int	val;
 	static	int	secs_left;
+	int	my_poll_time = first_poll_time;
 
-#if defined(HAVE_PROCTITLE)
+#if defined(HAVE_SETPROCTITLE)
 	setproctitle("parent of %d (%d)", 
 	    (int)cchild, start_count);
 #endif
@@ -699,7 +752,8 @@ ssh_watch(int sock)
 
 			secs_left = alarm(0);
 			if (secs_left == 0)
-				secs_left = poll_time;
+				secs_left = my_poll_time;
+			my_poll_time = poll_time;
 
 			errlog(LOG_DEBUG, 
 			    "set alarm for %d secs", secs_left);
@@ -937,7 +991,7 @@ grace_time(time_t last_start)
 
 	if (tries > 5) {
 		t = (double)(tries - 5);
-		n = (int)(poll_time / 100.0) * (t * (t/3));
+		n = (int)((poll_time / 100.0) * (t * (t/3)));
 		interval = (n > poll_time) ? poll_time : n;
 		if (interval) {
 			errlog(LOG_DEBUG, 
@@ -979,7 +1033,7 @@ conn_test(int sock, char *host, char *write_port)
 	long	id;			/* for a random number */
 
 	struct	utsname uts;
-	char	wbuf[64+sizeof(uts.nodename)];
+	char	wbuf[64+sizeof(uts.nodename)+MAX_MESSAGE];
 	char	rbuf[sizeof(wbuf)];
 
 	wd = -1;			/* default desc. values */
@@ -1025,8 +1079,8 @@ conn_test(int sock, char *host, char *write_port)
 		 * (ourself, our children).
 		 */
 		if (snprintf(wbuf, sizeof(wbuf), 
-		    "%s %s %d %ld\r\n", uts.nodename, __progname, 
-		    (int)getpid(), id) >= sizeof(wbuf))
+		    "%s %s %d %ld %s\r\n", uts.nodename, __progname, 
+		    (int)getpid(), id, echo_message) >= sizeof(wbuf))
 			xerrlog(LOG_ERR, "conn_test: buffer overflow");
 		memset(rbuf, '\0', sizeof(rbuf));
 
@@ -1243,7 +1297,7 @@ conn_send_and_receive(char *rp, char *wp, size_t len,
 	return 0;
 }
 
-#ifdef HAVE_NO_ADDRINFO
+#ifndef HAVE_ADDRINFO
 
 /*
  * Convert names to addresses, setup for connection.
@@ -1324,7 +1378,7 @@ conn_listen(char *host,  char *port)
 	return sock;
 }
 
-#else
+#else /* HAVE_ADDRINFO */
 
 /*
  * Convert names to addresses, setup for connection.
@@ -1422,7 +1476,20 @@ conn_listen(char *host,  char *port)
 
 	return sock;
 }
-#endif
+#endif /* ! HAVE_ADDRINFO */
+
+/*
+ * On OpenBSD _exit() calls atexit() registered functions.
+ * Solaris has a function, _exithandle(), you can call
+ * before _exit().
+ */
+void
+unlink_pid_file(void)
+{
+	if (pid_file_created)
+		(void)unlink(pid_file_name);
+	pid_file_created = 0;
+}
 
 /*
  * Nicely formatted time string for logging
@@ -1468,6 +1535,7 @@ xerrlog(int level, char *fmt, ...)
 	va_end(ap);
 
 	ssh_kill();
+	unlink_pid_file();
 	_exit(1);
 }
 
@@ -1481,7 +1549,7 @@ void
 doerrlog(int level, char *fmt, va_list ap)
 {
 	FILE	*fl;
-#if defined(__aix__)
+#ifndef HAVE_VSYSLOG
 	char	logbuf[1024];
 #endif
 
@@ -1489,7 +1557,7 @@ doerrlog(int level, char *fmt, va_list ap)
 
 	if (loglevel >= level) {
 		if (logtype & L_SYSLOG) {
-#if defined(__aix__)
+#ifndef HAVE_VSYSLOG
 			(void)vsnprintf(logbuf, sizeof(logbuf), fmt, ap);
 			syslog(level, logbuf);
 #else

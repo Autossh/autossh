@@ -1,38 +1,16 @@
 
-autossh Version 1.3
+autossh Version 1.4
 -------------------
 
 Building and Installing Autossh
 --------------------------------
 
-The makefiles assume you're using gcc. If not, you will have to
-change some flags.
+With version 1.4, autossh now uses autoconf. So the build procedure
+is now the well-known:
 
-Select the makefile that matches your system:
-
-       Makefile.bsd	 - OpenBSD, FreeBSD, NetBSD
-       Makefile.linux	 - Linux
-       Makefile.solaris	 - Solaris
-       Makefile.solaris9 - Solaris >= 9 (native ssh)
-       Makefile.apple    - MacOS X (aka Darwin)
-       Makefile.aix      - AIX >= 4.3
-       Makefile.cygwin   - Cygwin environment for Windows
-
-You should check that SSH in the Makefile points to the location
-of the ssh binary on your system. Then run make with the appropriate 
-file, for example:
-
-     make -f Makefile.bsd
-
-Copy the resulting autossh binary to where you'd like it. Use
-
-     make -f Makefile.bsd allclean
-
-to clean up after.
-
-If you get errors about getaddrinfo and such not being defined, you may 
-define HAVE_NO_ADDRINFO (see Makefile.cygwin for example). This will be 
-necessary for some older systems such as Solaris 2.6.
+	./configure
+	make
+	make install
 
 Look at autossh.host for an example wrapper script.
 
@@ -182,38 +160,42 @@ Environment Variables
 
 The following environment variables can be set:
 
-    AUTOSSH_PATH	  - path to the ssh executable, in case
-			    it is different than that compiled in.
-    AUTOSSH_POLL	  - poll time in seconds; default is 600.
-			    If the poll time is less than twice the 
-			    network timeouts (default 15 seconds) the 
-			    network timeouts will be adjusted downward 
-			    to 1/2 the poll time.
-    AUTOSSH_LOGLEVEL	  - log level, they correspond to the levels 
-			    used by syslog; so 0-7 with 7 being the
-			    chattiest.
-    AUTOSSH_LOGFILE	  - sets autossh to use the named log file,
-			    rather than syslog.
     AUTOSSH_DEBUG	  - sets logging level to LOG_DEBUG, and if
 			    the operating system supports it, sets
 			    syslog to duplicate log entries to stderr.
-    AUTOSSH_PORT	  - set monitor port. Mostly in case ssh
-			    appropriates -M at some time. But because
-			    of this possible use, AUTOSSH_PORT overrides
-			    the -M flag.
     AUTOSSH_GATETIME      - how long ssh must be up before we consider
 	                    it a successful connection. Default is 30
 			    seconds. If set to 0, then this behaviour
 			    is disabled, and as well, autossh will retry
 			    even on failure of first attempt to run ssh.
-    AUTOSSH_MAXSTART	  - Specifies how many times ssh should be started.
+    AUTOSSH_LOGFILE	  - sets autossh to use the named log file,
+			    rather than syslog.
+    AUTOSSH_LOGLEVEL	  - log level, they correspond to the levels 
+			    used by syslog; so 0-7 with 7 being the
+			    chattiest.
+    AUTOSSH_MAXSTART	  - specifies how many times ssh should be started.
 			    A negative number means no limit on the number 
 			    of times ssh is started. The default value is -1.
-    AUTOSSH_NTSERVICE     - When set to "yes" , setup autossh to run as an 
+    AUTOSSH_MESSAGE	  - append a custom message to the echo string (max 64
+			    bytes).
+    AUTOSSH_NTSERVICE     - when set to "yes" , setup autossh to run as an 
 			    NT service under cygrunsrv. This adds the -N flag
 			    for ssh if not already set, sets the log output 
 			    to stdout, and changes the behaviour on ssh exit 
 			    so that it will restart even on a normal exit.
+    AUTOSSH_PATH	  - path to the ssh executable, in case
+			    it is different than that compiled in.
+    AUTOSSH_PIDFILE	  - write autossh pid to specified file.
+    AUTOSSH_POLL	  - poll time in seconds; default is 600.
+			    If the poll time is less than twice the 
+			    network timeouts (default 15 seconds) the 
+			    network timeouts will be adjusted downward 
+			    to 1/2 the poll time.
+    AUTOSSH_FIRST_POLL	  - time to initial poll (default is as above).
+    AUTOSSH_PORT	  - set monitor port. Mostly in case ssh
+			    appropriates -M at some time. But because
+			    of this possible use, AUTOSSH_PORT overrides
+			    the -M flag.
 
 Logging and Syslog
 ------------------

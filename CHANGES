@@ -1,4 +1,15 @@
 
+Version 1.4
+
+- initialise ep in main() to avoid warning (Marcelo Goes)
+- fix where cast to int happens when calculating next time to poll
+  connection (Omer Erdem Demir)
+- fix '--' use so can pass -M to autossh for session multiplexing
+- fix use of strcpy for overlapping copy in strip_arg (Filippo Giunchedi).
+- add basic GNU autoconf support and drop per-platform Makefiles (Andre Lucas)
+- pid file support (Ben Vitale)
+- arbitrary messages in echo string (Ron Yorston)
+
 Version 1.3
 
 - fix AUTOSSH_DEBUG for Solaris and AIX

@@ -17,7 +17,7 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.\" $Id: autossh.1,v 1.18 2005/03/22 02:47:29 harding Exp $
+.\" $Id: autossh.1,v 1.20 2006/05/21 03:33:00 harding Exp $
 .\"
 .Dd Jul 20, 2004
 .Dt AUTOSSH 1
@@ -27,6 +27,7 @@
 .Nd monitor and restart ssh sessions
 .Sh SYNOPSIS
 .Nm autossh
+.Op Fl V
 .Op Fl M Ar port[:echo_port]
 .Op Fl f
 .Ar [SSH_OPTIONS]
@@ -185,7 +186,7 @@ options to have the SSH client exit if it finds itself no longer
 connected to the server. In many ways this may be a better solution than 
 the monitoring port.
 .It Fl f
-Causes autossh to drop to the background before running ssh. The
+causes autossh to drop to the background before running ssh. The
 .Fl f 
 flag is stripped from arguments passed to ssh. Note that there is a crucial
 a difference between
@@ -198,7 +199,7 @@ ssh will be unable to ask for passwords or passphrases.
 .It Fl V 
 causes 
 .Nm 
-to display its version and exit.
+to display its version number and exit.
 .Sh ENVIRONMENT
 Other than the flag to set the connection monitoring port,
 .Nm 
@@ -206,14 +207,16 @@ uses environment variables to control features. ssh seems to be
 still collecting letters for options, and this seems the easiest
 way to avoid collisions.
 .Bl -tag -width Ds
-.It Ev AUTOSSH_PATH
-Specifies the path to the ssh executable, in case it is 
-different than the path compiled in.
-.It Ev AUTOSSH_POLL
-Specifies the connection poll time in seconds; default is 600 seconds.
-If the poll time is less than twice the network timeouts (default 15
-seconds) the network timeouts will be adjusted downward to 1/2 the
-poll time.
+.It Ev AUTOSSH_DEBUG
+If this variable is set, the logging level is set to to LOG_DEBUG, and
+if the operating system supports it, syslog is set to duplicate log
+entries to stderr.
+.It Ev AUTOSSH_GATETIME
+Specifies how long ssh must be up before we consider it a successful
+connection. The default is 30 seconds. Note that if AUTOSSH_GATETIME
+is set to 0, then not only is the gatetime behaviour turned off, but
+autossh also ignores the first run failure of ssh. This may be useful
+when running autossh at boot.  
 .It Ev AUTOSSH_LOGLEVEL
 Specifies the log level, corresponding to the levels used by syslog;
 so 0-7 with 7 being the chattiest.
@@ -221,30 +224,34 @@ so 0-7 with 7 being the chattiest.
 Specifies that
 .Nm
 should use the named log file, rather than syslog.
-.It Ev AUTOSSH_DEBUG
-If this variable is set, the logging level is set to to LOG_DEBUG, and
-if the operating system supports it, syslog is set to duplicate log
-entries to stderr.
-.It Ev AUTOSSH_PORT
-Sets the connection monitoring port. Mostly in case ssh
-appropriates -M at some time. But because of this possible use, 
-AUTOSSH_PORT overrides the -M flag. A value of 0 turns the
-monitoring function off.
-.It Ev AUTOSSH_GATETIME
-Specifies how long ssh must be up before we consider it a successful
-connection. The default is 30 seconds. Note that if AUTOSSH_GATETIME
-is set to 0, then not only is the gatetime behaviour turned off, but
-autossh also ignores the first run failure of ssh. This may be useful
-when running autossh at boot.  
 .It Ev AUTOSSH_MAXSTART
 Specifies how many times ssh should be started. A negative number
 means no limit on the number of times ssh is started. The default
 value is -1.
+.It Ev AUTOSSH_MESSAGE
+Append message to echo message sent when testing connections.
 .It Ev AUTOSSH_NTSERVICE 
 (Cygwin only.) When set to "yes" , autossh sets up to run as an NT
 service under cygrunsrv. This adds the -N flag for ssh if not already
 set, sets the log output to stdout, and changes the behaviour on ssh
 exit so that it will restart even on a normal exit.
+.It Ev AUTOSSH_PATH
+Specifies the path to the ssh executable, in case it is 
+different than the path compiled in.
+.It Ev AUTOSSH_PIDFILE
+Write autossh pid to specified file.
+.It Ev AUTOSSH_POLL
+Specifies the connection poll time in seconds; default is 600 seconds.
+If the poll time is less than twice the network timeouts (default 15
+seconds) the network timeouts will be adjusted downward to 1/2 the
+poll time.
+.It Ev AUTOSSH_FIRST_POLL
+Specifies the time to wait before the first connection test. Thereafter
+the general poll time is used (see AUTOSSH_POLL above).
+.It Ev AUTOSSH_PORT
+Sets the connection monitoring port. Mostly in case ssh appropriates
+-M at some time. But because of this possible use, AUTOSSH_PORT
+overrides the -M flag. A value of 0 turns the monitoring function off.
 .Sh AUTHOR
 .Nm
 was written by Carson Harding.

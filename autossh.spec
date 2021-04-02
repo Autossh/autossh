@@ -1,6 +1,6 @@
 Summary:	Automatically restart SSH sessions and tunnels
 Name:		autossh
-Version:	1.3
+Version:	1.4
 Release:	1
 License:	Distributable
 Group:		Applications/Networking
@@ -17,7 +17,9 @@ it as necessary should it die or stop passing traffic.
 %setup -q
 
 %build
-%{__make} -f Makefile.linux
+%configure
+
+%{__make}
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -36,6 +38,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_mandir}/man1/*
 
 %changelog
+* Sat May 20 2006 Carson Harding <harding@motd.ca>
+- update to 1.4 and use autoconf
+
 * Wed Feb 02 2005 Carson Harding <harding@motd.ca>
 - very minor changes to spec file
 
