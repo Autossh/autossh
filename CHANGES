@@ -1,4 +1,14 @@
 
+Version 1.4c
+
+- updated option string up to OpenSSH 5.6
+- when using -f, set gate_time to 0; the assumption is that
+  it is being used for infrastructure (i.e. in a system startup),
+  has been tested, and bombing out just because the remote end is
+  not up is not the desired behaviour.
+- add patch from Thorsten Glazer for configure, fixes misplaced
+  parenthesis and check for __progname.
+
 Version 1.4b
 
 - add AUTOSSH_MAXLIFETIME (patch from Steven Clark)

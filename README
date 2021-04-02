@@ -79,7 +79,8 @@ autossh has only three arguments of its own:
         -f flag is stripped from arguments passed to ssh. Note that there
         is a crucial a difference between the -f with autossh, and -f
         with ssh: when used with autossh, ssh will be *unable* to ask for
-        passwords or passphrases.
+        passwords or passphrases. When -f is used, the "starting gate"
+        time (see AUTOSSH_GATETIME) will be set to 0.
 
  -V     to have autossh display its version and exit.
 
@@ -117,9 +118,10 @@ Startup behaviour:
      initial failed authentication, connection, etc. This time is 30 seconds
      by default, and can be adjusted (see the AUTOSSH_GATETIME environment
      variable below).
-   - NOTE: if AUTOSSH_GATETIME is set to 0, then BOTH of the above
+   - NOTE: If AUTOSSH_GATETIME is set to 0, then BOTH of the above
            behaviours are disabled. This is useful for, for example,
-	   having autossh start on boot.
+	   having autossh start on boot. The "starting gate" time is
+	   also set to 0 with the -f flag to autossh is used.
 
 Continued failures:
 

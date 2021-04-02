@@ -81,7 +81,7 @@ extern char *__progname;
 char *__progname;
 #endif
 
-const char *rcsid = "$Id: autossh.c,v 1.81 2008/04/04 22:29:58 harding Exp $";
+const char *rcsid = "$Id: autossh.c,v 1.82 2011/10/12 20:29:22 harding Exp $";
 
 #ifndef SSH_PATH
 #  define SSH_PATH "/usr/bin/ssh"
@@ -104,7 +104,7 @@ const char *rcsid = "$Id: autossh.c,v 1.81 2008/04/04 22:29:58 harding Exp $";
 
 #define NO_RD_SOCK	-2	/* magic flag for echo: no read socket */
 
-#define	OPTION_STRING "M:V1246ab:c:e:fgi:kl:m:no:p:qstvw:xACD:F:I:L:NO:PR:S:TXY"
+#define	OPTION_STRING "M:V1246ab:c:e:fgi:kl:m:no:p:qstvw:xyACD:F:I:MKL:NO:PR:S:TVXY"
 
 int	logtype  = L_SYSLOG;	/* default log to syslog */
 int	loglevel = LOG_INFO;	/* default loglevel */
@@ -204,7 +204,9 @@ usage(int code)
 		    "                        "
 		    "  before we decide it really was established\n"
 		    "                        "
-		    "  (in seconds)\n");
+		    "  (in seconds). Default is %d seconds; use of -f\n"
+		    "                        "
+		    "  flag sets this to 0.\n", GATE_TIME);
 		fprintf(stderr, 
 		    "    AUTOSSH_LOGFILE     "
 		    "- file to log to (default is to use the syslog\n"
@@ -453,6 +455,12 @@ main(int argc, char **argv)
 			xerrlog(LOG_ERR, "run as daemon failed: %s", 
 			    strerror(errno));
 		}
+		/* 
+		 * If running as daemon, the user likely wants it
+		 * to just run and not fail early (perhaps machines
+		 * are coming up, etc.)
+		 */ 
+		gate_time = 0;
 	}
 
 	if (pid_file_name) {
