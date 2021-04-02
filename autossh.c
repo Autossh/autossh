@@ -4,7 +4,7 @@
  *
  * 	From the example of rstunnel.
  *
- * Copyright (c) Carson Harding, 2002-2008.
+ * Copyright (c) Carson Harding, 2002-2018.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -20,6 +20,8 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR 
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * $Id: autossh.c,v 1.89 2018/03/18 19:27:49 harding Exp $
  *
  */
 
@@ -81,7 +83,7 @@ extern char *__progname;
 char *__progname;
 #endif
 
-const char *rcsid = "$Id: autossh.c,v 1.84 2015/02/10 04:31:16 harding Exp $";
+const char *rcsid = "$Id: autossh.c,v 1.89 2018/03/18 19:27:49 harding Exp $";
 
 #ifndef SSH_PATH
 #  define SSH_PATH "/usr/bin/ssh"
@@ -97,14 +99,17 @@ const char *rcsid = "$Id: autossh.c,v 1.84 2015/02/10 04:31:16 harding Exp $";
 
 #define P_CONTINUE	0	/* continue monitoring */
 #define P_RESTART	1	/* restart ssh process */
-#define P_EXIT		2	/* exit */
+#define P_EXITOK	2	/* exit ok */
+#define P_EXITERR	3	/* exit with error */
 
 #define L_FILELOG 	0x01	/* log to file   */
 #define L_SYSLOG  	0x02	/* log to syslog */
 
 #define NO_RD_SOCK	-2	/* magic flag for echo: no read socket */
 
-#define	OPTION_STRING "M:V1246ab:c:e:fgi:kl:m:no:p:qstvw:xyACD:F:I:MKL:NO:PR:S:TVXY"
+#define N_FAST_TRIES    5       /* try this many times fast before slowing */
+
+#define	OPTION_STRING "M:V1246ab:c:e:fgi:kl:m:no:p:qstvw:xyACD:E:F:GI:MKL:NO:PQ:R:S:TW:XY"
 
 int	logtype  = L_SYSLOG;	/* default log to syslog */
 int	loglevel = LOG_INFO;	/* default loglevel */
@@ -140,6 +145,7 @@ char	**newav;
 
 int	cchild;			/* current child */
 
+volatile sig_atomic_t   exit_signalled;  /* signalled outside of monitor loop */
 volatile sig_atomic_t	restart_ssh;	/* signalled to restart ssh child */
 volatile sig_atomic_t	dolongjmp;
 sigjmp_buf jumpbuf;
@@ -148,7 +154,7 @@ void	usage(int code) __attribute__ ((__noreturn__));
 void	get_env_args(void);
 void	add_arg(char *s);
 void	strip_arg(char *arg, char ch, char *opts);
-void	ssh_run(int sock, char **argv);
+int	ssh_run(int sock, char **argv);
 int	ssh_watch(int sock);
 int	ssh_wait(int options);
 void	ssh_kill(void);
@@ -171,7 +177,10 @@ void	xerrlog(int level, char *fmt, ...)
 	    __attribute__ ((__format__ (__printf__, 2, 3)));
 void	doerrlog(int level, char *fmt, va_list ap);
 char	*timestr(void);
-void	sig_catch(int sig);
+void	set_exit_sig_handler(void);
+void    set_sig_handlers(void);
+void    unset_sig_handlers(void);
+void    sig_catch(int sig);
 int	exceeded_lifetime(void);
 
 void
@@ -265,6 +274,7 @@ main(int argc, char **argv)
 	char	wmbuf[256], rmbuf[256];
 	FILE	*pid_file;
 
+	int     retval = 0;
 	int	sock = -1;
 	int	done_fwds = 0;
 	int	runasdaemon = 0;
@@ -478,7 +488,7 @@ main(int argc, char **argv)
 		fclose(pid_file);
 	}
 
-	ssh_run(sock, newav);
+	retval = ssh_run(sock, newav);
 
 	if (sock >= 0) {
 		shutdown(sock, SHUT_RDWR);
@@ -488,6 +498,8 @@ main(int argc, char **argv)
 	if (logtype & L_SYSLOG)
 		closelog();
 
+	if (retval == P_EXITERR)
+		exit(1);
 	exit(0);
 }
 
@@ -624,7 +636,7 @@ get_env_args(void)
 
 	if ((s = getenv("AUTOSSH_MAXSTART")) != NULL) {
 		max_start = (int)strtol(s, &t, 0);
-		if (*s == '\0' || max_start < 0 || *t != '\0')
+		if (*s == '\0' || max_start < -1 || *t != '\0')
 			xerrlog(LOG_ERR, "invalid max start number \"%s\"", s);
 	}
 
@@ -635,7 +647,6 @@ get_env_args(void)
 			xerrlog(LOG_ERR, "echo message may only be %d bytes long",
 			    MAX_MESSAGE);
 	} 
-
 
 	if ((s = getenv("AUTOSSH_PORT")) != NULL)
 		if (*s != '\0')
@@ -699,25 +710,11 @@ get_env_args(void)
 /*
  * Run ssh
  */
-void
+int
 ssh_run(int sock, char **av) 
 {
-	struct	sigaction act;
+	int retval;
 	struct	timeval tv;
-
-	act.sa_handler = sig_catch;
-	sigemptyset(&act.sa_mask);
-	act.sa_flags = 0;
-
-	sigaction(SIGTERM, &act, NULL);
-	sigaction(SIGINT,  &act, NULL);
-	sigaction(SIGHUP,  &act, NULL);
-	sigaction(SIGUSR1, &act, NULL);
-	sigaction(SIGUSR2, &act, NULL);
-	sigaction(SIGCHLD, &act, NULL);
-
-	act.sa_flags |= SA_RESTART;
-	sigaction(SIGALRM, &act, NULL);
 
 	/* 
 	 * There are much better things. and we all wait
@@ -726,12 +723,18 @@ ssh_run(int sock, char **av)
 	gettimeofday(&tv, NULL);
 	srandom(getpid() ^ tv.tv_usec ^ tv.tv_sec);
 
+	set_exit_sig_handler();
+	
 	while (max_start < 0 || start_count < max_start) {
 		if (exceeded_lifetime())
-			return;
+			return P_EXITOK;
 		restart_ssh = 0;
 		start_count++;
 		grace_time(start_time);
+		if (exit_signalled) {
+			errlog(LOG_ERR, "signalled to exit");
+			return P_EXITERR;
+		}
 		time(&start_time);
 		if (max_start < 0)
 			errlog(LOG_INFO, "starting ssh (count %d)", 
@@ -742,12 +745,13 @@ ssh_run(int sock, char **av)
 		cchild = fork();
 		switch (cchild) {
 		case 0:
-			errlog(LOG_DEBUG, "execing %s", av[0]);
+			errlog(LOG_DEBUG, "child of %d execing %s",
+			    getppid(), av[0]);
 			execvp(av[0], av);
-			xerrlog(LOG_ERR, "%s: %s", av[0], strerror(errno));
+			errlog(LOG_ERR, "%s: %s", av[0], strerror(errno));
 			 /* else can loop restarting! */
-			kill(SIGTERM, getppid());
-			exit(1);
+			kill(getppid(), SIGTERM);
+			_exit(1);
 			break;
 		case -1:
 			cchild = 0;
@@ -755,13 +759,19 @@ ssh_run(int sock, char **av)
 			break;
 		default:
 			errlog(LOG_INFO, "ssh child pid is %d", (int)cchild);
-			if (ssh_watch(sock) == P_EXIT)
-				return;
+			set_sig_handlers();
+			retval = ssh_watch(sock);
+			dolongjmp = 0;
+			unset_sig_handlers();
+			if (retval == P_EXITOK || retval == P_EXITERR)
+				return retval;
 			break;
 		}
 	}
 
-	errlog(LOG_INFO, "max start count reached; exiting"); 
+	errlog(LOG_INFO, "max start count reached; exiting");
+
+	return P_EXITOK;
 }
 
 /*
@@ -820,6 +830,15 @@ ssh_watch(int sock)
 
 			alarm(secs_left);
 			dolongjmp = 1;
+
+			/* In case we were signalled while setting 
+			   all this up */
+			if (exit_signalled) {
+				errlog(LOG_INFO, "signalled to exit");
+				ssh_kill();
+				return P_EXITERR;
+			}
+
 			pause();
 
 		} else {
@@ -832,12 +851,12 @@ ssh_watch(int sock)
 				errlog(LOG_INFO, 
 				    "received signal to exit (%d)", val);
 				ssh_kill();
-				return P_EXIT;
+				return P_EXITERR;
 				break;
 			case SIGALRM:
 				if (exceeded_lifetime()) {
 					ssh_kill();
-					return P_EXIT;
+					return P_EXITOK;
 				}
 
 				if (writep && sock != -1 &&
@@ -895,10 +914,10 @@ exceeded_lifetime(void)
  * known dead child.
  *
  * If child was deliberately killed (TERM, INT, KILL),
- * or if child called exit(0) or _exit(0), then pass
- * message on return to give up (P_EXIT). Otherwise death 
- * was unnatural (or unintended), and pass message back
- * to restart (P_RESTART).
+ * the pass message back to restart. If child called exit(0) 
+ * or _exit(0), then pass message on return to give up (P_EXITOK). 
+ * Otherwise death  was unnatural (or unintended), and pass 
+ * message back to restart (P_RESTART).
  *
  * However, if child died with exit(1) on first try, then
  * there is some startup error (anything from network
@@ -931,6 +950,14 @@ ssh_wait(int options) {
 	if (waitpid(cchild, &status, options) > 0) {
 		if (WIFSIGNALED(status)) {
 			switch(WTERMSIG(status)) {
+#if 0
+	/* If someone kills the child, we assume
+	   it was hung up or something and they
+	   wished to restart it. Not entirely sure
+	   want to keep this behaviour or what 
+	   signals it should apply to, therefore 
+	   the #if 0.
+	*/
 			case SIGINT: 
 			case SIGTERM: 
 			case SIGKILL:
@@ -938,8 +965,9 @@ ssh_wait(int options) {
 				errlog(LOG_INFO, 
 				    "ssh exited on signal %d; parent exiting", 
 				    WTERMSIG(status));
-				return P_EXIT;
+				return P_EXITERR;
 				break;
+#endif
 			default:
 				/* continue on and restart */
 				errlog(LOG_INFO, 
@@ -960,7 +988,7 @@ ssh_wait(int options) {
 					    "ssh exited prematurely "
 					    "with status %d; %s exiting", 
 					    evalue, __progname);
-					return P_EXIT;
+					return P_EXITERR;
 				}
 			}
 			switch(evalue) {
@@ -981,6 +1009,19 @@ ssh_wait(int options) {
 				    evalue);
 				return P_RESTART;
 				break;
+			case 0:  /* exited on success */
+#if defined(__CYGWIN__)
+				if (ntservice)
+					return P_RESTART;
+#endif
+				errlog(LOG_INFO,
+				    "ssh exited with status %d; %s exiting",
+				    evalue, __progname);
+				return P_EXITOK;
+			case 2:
+				/* can exit with 2 with temporary issues
+				   setting up tunnels */
+				/* FALLTHROUGH */
 			case 1:	
 				/*
 				 * the first time, it could be any of
@@ -998,17 +1039,11 @@ ssh_wait(int options) {
 					return P_RESTART;
 				}
 				/* FALLTHROUGH */
-			case 0:  /* exited on success */
-#if defined(__CYGWIN__)
-				if (ntservice)
-					return P_RESTART;
-				/* FALLTHROUGH */
-#endif
 			default: /* remote command error status */
 				errlog(LOG_INFO,
 				    "ssh exited with status %d; %s exiting",
 				    evalue, __progname);
-				return P_EXIT;
+				return P_EXITERR;
 				break;
 			}
 		}
@@ -1088,8 +1123,8 @@ grace_time(time_t last_start)
 	errlog(LOG_DEBUG,
 	    "checking for grace period, tries = %d", tries);
 
-	if (tries > 5) {
-		t = (double)(tries - 5);
+	if (tries > N_FAST_TRIES) {
+		t = (double)(tries - N_FAST_TRIES);
 		n = (int)((poll_time / 100.0) * (t * (t/3)));
 		interval = (n > poll_time) ? poll_time : n;
 		if (interval) {
@@ -1101,6 +1136,68 @@ grace_time(time_t last_start)
 	return;
 }
 
+void
+set_exit_sig_handler()
+{
+	struct	sigaction act;
+
+	memset(&act, 0, sizeof(act));
+	act.sa_handler = sig_catch;
+	sigemptyset(&act.sa_mask);
+	act.sa_flags = 0;
+
+	sigaction(SIGTERM, &act, NULL);
+	sigaction(SIGINT,  &act, NULL);
+}
+
+void
+set_sig_handlers(void)
+{
+	struct	sigaction act;
+
+	memset(&act, 0, sizeof(act));
+	act.sa_handler = sig_catch;
+	sigemptyset(&act.sa_mask);
+	act.sa_flags = 0;
+
+	sigaction(SIGTERM, &act, NULL);
+	sigaction(SIGINT,  &act, NULL);
+	sigaction(SIGHUP,  &act, NULL);
+	sigaction(SIGUSR1, &act, NULL);
+	sigaction(SIGUSR2, &act, NULL);
+	sigaction(SIGCHLD, &act, NULL);
+
+	act.sa_flags |= SA_RESTART;
+	sigaction(SIGALRM, &act, NULL);
+
+	act.sa_handler = SIG_IGN;
+	act.sa_flags = 0;
+	sigaction(SIGPIPE, &act, NULL);
+}
+
+void
+unset_sig_handlers(void)
+{
+	struct	sigaction act;
+
+	memset(&act, 0, sizeof(act));
+	act.sa_handler = SIG_DFL;
+	sigemptyset(&act.sa_mask);
+	act.sa_flags = 0;
+	
+	/* We don't reset SIGTERM, as we want the
+	   handler to persist in the run_ssh() loop */
+	/* This seems a little hidden down in here... */
+	/* sigaction(SIGTERM, &act, NULL); */
+	/* sigaction(SIGINT,  &act, NULL); */
+	sigaction(SIGHUP,  &act, NULL);
+	sigaction(SIGUSR1, &act, NULL);
+	sigaction(SIGUSR2, &act, NULL);
+	sigaction(SIGCHLD, &act, NULL);
+	sigaction(SIGALRM, &act, NULL);
+	sigaction(SIGPIPE, &act, NULL);
+}
+
 /*
  * If we're primed, longjump back.
  */
@@ -1109,6 +1206,8 @@ sig_catch(int sig)
 {
 	if (sig == SIGUSR1)
 		restart_ssh = 1;
+	else if (sig == SIGTERM || sig == SIGINT)
+		exit_signalled = 1;
 	if (dolongjmp) {
 		dolongjmp = 0;
 		siglongjmp(jumpbuf, sig);

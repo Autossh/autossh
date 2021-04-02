@@ -77,7 +77,7 @@ autossh has only three arguments of its own:
 
  -f     Causes autossh to drop to the background before running ssh. The
         -f flag is stripped from arguments passed to ssh. Note that there
-        is a crucial a difference between the -f with autossh, and -f
+        is a crucial difference between the -f with autossh, and -f
         with ssh: when used with autossh, ssh will be *unable* to ask for
         passwords or passphrases. When -f is used, the "starting gate"
         time (see AUTOSSH_GATETIME) will be set to 0.
@@ -205,6 +205,19 @@ The following environment variables can be set:
 			    appropriates -M at some time. But because
 			    of this possible use, AUTOSSH_PORT overrides
 			    the -M flag.
+
+SSH Options
+------------------
+
+There are two particular OpenSSH options that are useful when using
+autossh:
+
+1) ExitOnForwardFailure=yes on the client side to make sure forwardings
+have succeeded when autossh assumes the connection is setup properly.
+
+2) ClientAliveInterval on the server side to make sure the listening
+socket is closed on the server side if the connection closes on the
+client side.
 
 Logging and Syslog
 ------------------

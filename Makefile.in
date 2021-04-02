@@ -1,8 +1,8 @@
-# $Id: Makefile.in,v 1.7 2015/02/10 04:31:16 harding Exp $
+# $Id: Makefile.in,v 1.8 2018/03/18 19:31:02 harding Exp $
 #
 # @configure_input@
 
-VER=		1.4e
+VER=		1.4f
 
 SSH=		@path_ssh@
 
@@ -31,7 +31,7 @@ all:		$(TARGET)
 
 
 $(TARGET):	$(OFILES)
-		$(CC) $(CPPFLAGS) -o $(TARGET) $(OFILES) $(LIBS)
+		$(CC) $(CPPFLAGS) $(LDFLAGS) -o $(TARGET) $(OFILES) $(LIBS)
 
 clean:
 		- /bin/rm -f *.o *.a *.core *~
@@ -45,18 +45,18 @@ distclean:	allclean
 		- /bin/rm -f Makefile
 
 install:	$(TARGET)
-		mkdir -p -m 755 $(bindir)
-		mkdir -p -m 755 $(prefix)/share/doc/autossh
-		mkdir -p -m 755 $(datadir)/examples/autossh
-		mkdir -p -m 755 $(mandir)/man1
-		cp $(TARGET) $(bindir)
-		cp CHANGES README $(datadir)/doc/autossh
-		cp autossh.host	$(datadir)/examples/autossh
-		cp rscreen $(datadir)/examples/autossh
-		cp autossh.1 $(mandir)/man1
-		chmod 755 $(bindir)/$(TARGET)
-		chmod 644 $(datadir)/doc/autossh/CHANGES
-		chmod 644 $(datadir)/doc/autossh/README
-		chmod 644 $(datadir)/examples/autossh/autossh.host 
-		chmod 644 $(datadir)/examples/autossh/rscreen
-		chmod 644 $(mandir)/man1/autossh.1 
+		mkdir -p -m 755 $(DESTDIR)$(bindir)
+		mkdir -p -m 755 $(DESTDIR)$(prefix)/share/doc/autossh
+		mkdir -p -m 755 $(DESTDIR)$(datadir)/examples/autossh
+		mkdir -p -m 755 $(DESTDIR)$(mandir)/man1
+		cp $(TARGET) $(DESTDIR)$(bindir)
+		cp CHANGES README $(DESTDIR)$(datadir)/doc/autossh
+		cp autossh.host	$(DESTDIR)$(datadir)/examples/autossh
+		cp rscreen $(DESTDIR)$(datadir)/examples/autossh
+		cp autossh.1 $(DESTDIR)$(mandir)/man1
+		chmod 755 $(DESTDIR)$(bindir)/$(TARGET)
+		chmod 644 $(DESTDIR)$(datadir)/doc/autossh/CHANGES
+		chmod 644 $(DESTDIR)$(datadir)/doc/autossh/README
+		chmod 644 $(DESTDIR)$(datadir)/examples/autossh/autossh.host 
+		chmod 644 $(DESTDIR)$(datadir)/examples/autossh/rscreen
+		chmod 644 $(DESTDIR)$(mandir)/man1/autossh.1 

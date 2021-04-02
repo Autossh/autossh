@@ -1,4 +1,26 @@
 
+Version 1.4f
+- Change behaviour when ssh child exits on signal. Previously
+  if SIGHUP, SIGTERM, or SIGKILL were used, autossh assumed that
+  it also was meant to exit. But it is possible that ssh was
+  killed because it had hung up or was unresponsive for some
+  reason. Restarting it is probably the better course.
+- Fix order of arguments to kill(). Bug reported by Dapeng Gao.
+- Ignore SIGPIPE. Issue noted and debugged by Rick van der Zwet.
+- Note use of ExitOnForwardFailure and ClientAliveInterval in
+  README and man page (Till Maas).
+- Should accept the default -1 with AUTOSSH_MAXSTART. Reported by
+  Daniel Hahler.
+- Restart ssh when ssh exits with 2, which it can do if
+  setting up tunnel fails due to race with remote end
+  tearing down. (Daniel Sutcliffe).
+- Daniel Hahler and Jindrich Makovich both reported that signals
+  will have no effect if before ssh started (sleeping in gatetime,
+  etc.) Signal handling is now set just just before monitoring the
+  child, and unset just after.
+- Makefile should use LDFLAGS (Waldemar Brodkorb).
+- memset() sigaction structure before use.
+
 Version 1.4e
 - By default, changing the poll time should change the first poll
   time to match. Only have different times if AUTOSSH_FIRST_POLL

@@ -1,7 +1,7 @@
 .\"  -*- nroff -*-
 .\"
 .\" Author: Carson Harding
-.\" Copyright (c) 2002 Carson Harding. All rights reserved.
+.\" Copyright (c) 2002-2018 Carson Harding. All rights reserved.
 .\"
 .\" Redistribution and use in source and binary forms, with or without
 .\" modification, are permitted.
@@ -17,9 +17,9 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.\" $Id: autossh.1,v 1.23 2015/02/10 04:31:16 harding Exp $
+.\" $Id: autossh.1,v 1.24 2018/03/18 19:28:38 harding Exp $
 .\"
-.Dd Jul 20, 2004
+.Dd Mar 18, 2018
 .Dt AUTOSSH 1
 .Os
 .Sh NAME
@@ -192,7 +192,7 @@ the monitoring port.
 causes autossh to drop to the background before running ssh. The
 .Fl f 
 flag is stripped from arguments passed to ssh. Note that there is a crucial
-a difference between
+difference between
 .Fl f 
 with autossh, and
 .Fl f
@@ -265,11 +265,27 @@ Sets the connection monitoring port. Mostly in case ssh appropriates
 -M at some time. But because of this possible use, AUTOSSH_PORT
 overrides the -M flag. A value of 0 turns the monitoring function off.
 .El
+.Sh ENVIRONMENT
+There are two particular OpenSSH options that are useful when using
+.Nm
+:
+.Fp
+.Cm ExitOnForwardFailure=yes
+on the client side to make sure forwardings
+have succeeded when autossh assumes the connection is setup properly.
+.Fp
+.Cm ClientAliveInterval
+on the server side to make sure the listening
+socket is closed on the server side if the connection closes on the
+client side.
+.El
 .Sh AUTHOR
 .Nm
 was written by Carson Harding.
 .Sh SEE ALSO
 .Xr ssh 1 ,
+.Xr ssh_config 5,
+.Xr sshd_config 5,
 .Xr ssh-add 1 ,
 .Xr ssh-agent 1 ,
 .Xr ssh-keygen 1 ,
