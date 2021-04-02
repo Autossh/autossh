@@ -1,0 +1,132 @@
+
+Version 1.3
+
+- fix AUTOSSH_DEBUG for Solaris and AIX
+- fix attempt to free() static storage (affected platforms without 
+  getaddrinfo() -- mostly cygwin) (Andrew Schulman)
+- change test and placement of typedef for socklen_t under OS X; new
+  OS X defines it
+- add ability to signal autossh to kill and restart ssh child, using
+  SIGUSR1
+- add hostname to monitor message (Ron Yorston)
+- check on looping on poll() where connection has been lost (spinning
+  and high CPU)
+- fix bug where length argument to accept() was not initialised
+- fix arg parsing bug where stripping -f from arguments would strip
+  from a parameter to the argument: e.g -L8808:foo:80 would become
+  -L8808:oo:80 (pointed out by Eric Larson)
+- pull out r/w loops in conn_test() into separate functions, makes
+  logic more apparent
+- add echo port support: have the remote server use the inetd
+  echo service to echo our test string back to us. Or use some other
+  echo service. Idea and patch from Ron Yorston. This makes it 1.3.
+- remove bad strcpy() (left over from some testing?) thanks to Ron
+  Yorston, change to memset read buffer to all zeros
+- fix ssh args when AUTOSSH_PORT=0 is used to turn monitor loop off
+  (Karl Berry)
+- add more descriptive usage output, by popular request
+
+Version 1.2g
+
+- add AUTOSSH_NTSERVICE (Andrew Schulman)
+- fix bad calculation for seconds left in poll time (again from
+  Andrew Schulman)
+- from Andrew Schulman: add support for older networking and cygwin
+- add AUTOSSH_MAXSTART (from Hugo Haas)
+- loop around waitpid() in ssh_kill() in case interrupted (thanks to
+  Jens Krabbenhoeft)
+- update ssh argument string
+- move openlog above port error checking
+- handle environment variables and -M arg being set to the
+  empty string (reported by Dan Christensen via Filippo Giunche)
+- add some rudimetary auto-adjust to the network timeouts for
+  low poll times. So by default 15secs on each of accept() and 
+  poll()to deal with high-latency connections, but as poll time 
+  falls below 30secs, then adjust timeouts down as well.
+- adjust division in grace_time() to allow for low poll time
+- don't call shutdown() and close() on invalid socket ()
+  (found by Dmitry V. Levin)
+
+Version 1.2f
+
+- by popular request, support the -f flag by doing the fork/background 
+  ourselves, and not passing the flag to ssh (thanks to Dan Christensen
+  for prodding me into it)
+- change timeout to from 5000 to 15000 ms to deal with reported issues
+  with high-latency links; unused var removal; and man page typo (thanks
+  to Michael Shields)
+
+Version 1.2e
+
+- check for attempt to use -f flag; exit as error
+- if AUTOSSH_GATETIME is 0, then disable any of the startup
+  failure bailouts, and just retry
+- set SO_REUSEADDR on listening socket (Jedi One's suggestion)
+- show port number in some error messages
+- note in man page and README about -M 0 turning port monitoring off
+- remove duplicate include of sys/socket.h
+
+Version 1.2d
+
+- AIX support (thanks to Stefan Rodenstein)
+- fix argument rewrite bug when using AUTOSSH_PORT (thanks
+  to Peter Williams)
+- log pid of ssh child just after fork
+
+Version 1.2c
+
+- use Marcus Friedl's suggestion to simply connect to "127.0.0.1" 
+  rather than "localhost", as not really using IPv6 anyway. And this
+  gets rid of annoying ipv6 localhost message on Solaris at least.
+- support for MacOS X using Greg Parker's fakepoll.
+
+Version 1.2b
+
+(Thanks to Simon Easter for bug reports and trials)
+
+- fix file descriptor leak
+- setsockopt()'s don't work for Solaris either. Give up on them.
+- set close-on-exec for read socket so will be closed when
+  ssh executed
+- do shutdown() before close() (paranoia)
+- close read socket before exit
+- pull read socket open and close up out of ssh_run()
+- cosmetic changes to some loops, get rid of newlines in some
+  errlog strings.
+
+Version 1.2a
+
+- setsockopt() will not set timeouts on socket read/write ops
+  under Linux 2.2 kernels (and earlier, I presume). So unless
+  someone tells me we really need them, I've #ifdef'd  the
+  setsockopt()s out for Linux.
+- check value of fd returned by accept().
+- Oh, there's a man page now. Unfortunately, it doesn't render 
+  for Solaris. Sorry, Solaris users are still stuck with the
+  README.
+
+Version 1.2
+
+- Major restructuring of code, mostly to support the change to 
+  a loop of forwarded ports to test the network connection.
+- Incremental back off on rate of connection attempts when
+  there are rapid failures to establish/maintain a connection.
+
+Version 1.1b
+
+- change handling of ssh exit status
+- introduce "starting gate" time: ssh process that dies too
+  early is deemed not to have made it out of the starting
+  gate, and autossh exits.
+
+Version 1.1a
+
+- fix race after failure to exec ssh where parent will
+  loop attempting to restart
+- add -V version flag
+- use strtoul() for environment option parsing
+- drop useless intermediate function ssh_setwatch()
+
+Version 1.1
+
+Initial release

@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# sample script to use autossh to open up a remote screen
+# session, or reconnect to an existing one. 
+#
+# $Id: rscreen,v 1.4 2002/05/07 17:54:13 harding Exp $
+#
+if [ "X$1" = "X" ]; then
+	echo "usage: `basename $0` <host>"
+	exit 1
+fi
+
+if [ "X$SSH_AUTH_SOCK" = "X" ]; then
+    eval `ssh-agent -s`
+    ssh-add $HOME/.ssh/id_rsa
+fi
+
+#AUTOSSH_POLL=600
+#AUTOSSH_PORT=20000
+#AUTOSSH_GATETIME=30
+#AUTOSSH_LOGFILE=$HOST.log
+#AUTOSSH_DEBUG=yes 
+#AUTOSSH_PATH=/usr/local/bin/ssh
+export AUTOSSH_POLL AUTOSSH_LOGFILE AUTOSSH_DEBUG AUTOSSH_PATH AUTOSSH_GATETIME AUTOSSH_PORT
+
+autossh -M 20004 -t $1 "screen -e^Zz -D -R"

@@ -1,0 +1,256 @@
+.\"  -*- nroff -*-
+.\"
+.\" Author: Carson Harding
+.\" Copyright (c) 2002 Carson Harding. All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+.\" IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+.\" OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+.\" IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+.\" INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+.\" NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+.\" DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+.\" THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+.\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+.\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+.\"
+.\" $Id: autossh.1,v 1.18 2005/03/22 02:47:29 harding Exp $
+.\"
+.Dd Jul 20, 2004
+.Dt AUTOSSH 1
+.Os
+.Sh NAME
+.Nm autossh
+.Nd monitor and restart ssh sessions
+.Sh SYNOPSIS
+.Nm autossh
+.Op Fl M Ar port[:echo_port]
+.Op Fl f
+.Ar [SSH_OPTIONS]
+.Sh DESCRIPTION
+.Nm
+is a program to start a copy of ssh and monitor it, restarting it as
+necessary should it die or stop passing traffic.
+.Pp
+The original idea and the mechanism were from rstunnel (Reliable SSH
+Tunnel). With version 1.2 of
+.Nm
+the method changed: 
+.Nm
+uses ssh to construct a loop of ssh forwardings (one from local to
+remote, one from remote to local), and then sends test data that it
+expects to get back. (The idea is thanks to Terrence Martin.)
+.Pp
+With version 1.3, a new method is added (thanks to Ron Yorston): a
+port may be specified for a remote echo service that will echo back
+the test data. This avoids the congestion and the aggravation of
+making sure all the port numbers on the remote machine do not
+collide. The loop-of -forwardings method remains available for
+situations where using an echo service may not be possible.
+.Pp
+.Sh CONTROLLING SSH
+.Pp
+.Ss SSH exits
+.Pp
+.Bl -tag -width Ds
+.Nm
+tries to distinguish the manner of death of the ssh process it
+is monitoring and act appropriately. The rules are:
+.Bl -tag -width Ds
+.It 1.
+If the ssh process exited normally (for example, someone typed
+"exit" in an interactive session), 
+.Nm
+exits rather than restarting;
+.It 2.
+If 
+.Nm
+itself receives a SIGTERM, SIGINT, or a SIGKILL signal, it assumes
+that it was deliberately signalled, and exits after killing the child
+ssh process; 
+.It 3.
+If
+.Nm 
+itself receives a SIGUSR1 signal, it kills the child ssh process and starts
+a new one;
+.It 4.
+Periodically (by default every 10 minutes),
+.Nm
+attempts to pass traffic on the monitor forwarded port. If this fails, 
+.Nm
+will kill the child ssh process (if it is still running) and start a new one; 
+.It 5.
+If the child ssh process dies for any other reason, 
+.Nm
+will attempt to start a new one.
+.El
+.Pp
+.Ss Startup behaviour
+.Pp
+If the ssh session fails with an exit status of 1 on the very first 
+try, 
+.Nm
+.Bl -tag -width Ds
+.It 1.
+will assume that there is some problem with syntax or the connection 
+setup, and will exit rather than retrying;
+.It 2.
+There is a "starting gate" time. If the first ssh process fails within
+the first few seconds of being started,
+.Nm
+assumes that 
+it never made it "out of the starting gate", and exits. This is to handle
+initial failed authentication, connection, etc. This time is 30 seconds
+by default, and can be adjusted (see the AUTOSSH_GATETIME environment
+variable below). If AUTOSSH_GATETIME is set to 0, then both behaviours 
+are disabled: there is no "starting gate", and autossh will restart even 
+if ssh fails on the first run with an exit status of 1.
+.El
+.Pp
+.Ss Continued failures
+.Pp
+If the ssh connection fails and attempts to restart it fail in
+quick succession, 
+.Nm
+will start delaying its attempts to
+restart, gradually backing farther and farther off up to a
+maximum interval of the 
+.Nm
+poll time (usually 10 minutes).
+.Nm
+can be "prodded" to retry by signalling it, perhaps with
+SIGHUP ("kill -HUP").
+.Pp
+.Ss Connection setup
+.Pp
+As connections must be established unattended, the use of 
+.Nm
+requires that some form of automatic authentication be set up. The use
+of RSAAuthentication with ssh-agent is the recommended method. The
+example wrapper script attempts to check if there is an agent running
+for the current environment, and to start one if there isn't.
+.Pp
+It cannot be stressed enough that you must make sure ssh works on its
+own, that you can set up the session you want before you try to
+run it under 
+.Nm 
+.
+.Pp
+If you are tunnelling and using an older version of ssh that does not
+support the 
+.Fl N
+flag, you should upgrade (your version has security
+flaws). If you can't upgrade, you may wish to do as rstunnel does, and
+give ssh a command to run, such as "sleep 99999999999".
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl M Ar port[:echo_port]
+specifies the base monitoring port to use. Without the echo port,
+this port and the port
+immediately above it (
+.Ar port
++ 1) should be something nothing else is
+using. 
+.Nm 
+will send test data on the base monitoring port, and
+receive it back on the port above. For example, if you specify "-M
+20000", 
+.Nm
+will set up forwards so that it can send data on port
+20000 and receive it back on 20001.
+.Pp
+Alternatively, a port for a remote echo service may be specified. This
+should be port 7 if you wish to use the standard inetd echo service.
+When an echo port is specified, only the specified monitor port is
+used, and it carries the monitor message in both directions.
+.Pp
+Many people disable the echo service, or even disable inetd, so check
+that this service is available on the remote machine. Some operating
+systems allow one to specify that the service only listen on the 
+localhost (loopback interface), which would suffice for this use.
+.Pp
+The echo service may also be something more complicated: perhaps
+a daemon that monitors a group of ssh tunnels.
+.Pp
+Setting the monitor port to 0 turns the monitoring function off, and
+autossh will only restart ssh upon ssh's exit. For example, if you are
+using a recent version of OpenSSH, you may wish to explore using the
+.Cm ServerAliveInterval
+and
+.Cm ServerAliveCountMax
+options to have the SSH client exit if it finds itself no longer 
+connected to the server. In many ways this may be a better solution than 
+the monitoring port.
+.It Fl f
+Causes autossh to drop to the background before running ssh. The
+.Fl f 
+flag is stripped from arguments passed to ssh. Note that there is a crucial
+a difference between
+.Fl f 
+with autossh, and
+.Fl f
+with ssh: when used with
+.Nm
+ssh will be unable to ask for passwords or passphrases.
+.It Fl V 
+causes 
+.Nm 
+to display its version and exit.
+.Sh ENVIRONMENT
+Other than the flag to set the connection monitoring port,
+.Nm 
+uses environment variables to control features. ssh seems to be 
+still collecting letters for options, and this seems the easiest
+way to avoid collisions.
+.Bl -tag -width Ds
+.It Ev AUTOSSH_PATH
+Specifies the path to the ssh executable, in case it is 
+different than the path compiled in.
+.It Ev AUTOSSH_POLL
+Specifies the connection poll time in seconds; default is 600 seconds.
+If the poll time is less than twice the network timeouts (default 15
+seconds) the network timeouts will be adjusted downward to 1/2 the
+poll time.
+.It Ev AUTOSSH_LOGLEVEL
+Specifies the log level, corresponding to the levels used by syslog;
+so 0-7 with 7 being the chattiest.
+.It Ev AUTOSSH_LOGFILE
+Specifies that
+.Nm
+should use the named log file, rather than syslog.
+.It Ev AUTOSSH_DEBUG
+If this variable is set, the logging level is set to to LOG_DEBUG, and
+if the operating system supports it, syslog is set to duplicate log
+entries to stderr.
+.It Ev AUTOSSH_PORT
+Sets the connection monitoring port. Mostly in case ssh
+appropriates -M at some time. But because of this possible use, 
+AUTOSSH_PORT overrides the -M flag. A value of 0 turns the
+monitoring function off.
+.It Ev AUTOSSH_GATETIME
+Specifies how long ssh must be up before we consider it a successful
+connection. The default is 30 seconds. Note that if AUTOSSH_GATETIME
+is set to 0, then not only is the gatetime behaviour turned off, but
+autossh also ignores the first run failure of ssh. This may be useful
+when running autossh at boot.  
+.It Ev AUTOSSH_MAXSTART
+Specifies how many times ssh should be started. A negative number
+means no limit on the number of times ssh is started. The default
+value is -1.
+.It Ev AUTOSSH_NTSERVICE 
+(Cygwin only.) When set to "yes" , autossh sets up to run as an NT
+service under cygrunsrv. This adds the -N flag for ssh if not already
+set, sets the log output to stdout, and changes the behaviour on ssh
+exit so that it will restart even on a normal exit.
+.Sh AUTHOR
+.Nm
+was written by Carson Harding.
+.Sh SEE ALSO
+.Xr ssh 1 ,
+.Xr ssh-add 1 ,
+.Xr ssh-agent 1 ,
+.Xr ssh-keygen 1 ,
+.Xr cygrunsrv 1 .
