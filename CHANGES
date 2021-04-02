@@ -1,4 +1,9 @@
 
+Version 1.4a
+
+- fix up pid file generation (Xander Hudson)
+- fix up Makefile.in (Andrew Schulman)
+
 Version 1.4
 
 - initialise ep in main() to avoid warning (Marcelo Goes)

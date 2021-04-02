@@ -1,16 +1,16 @@
-# $Id: Makefile.in,v 1.1 2006/05/21 03:33:00 harding Exp $
+# $Id: Makefile.in,v 1.3 2006/07/13 14:53:44 harding Exp $
 #
 # @configure_input@
 
-VER=		1.4
+VER=		1.4a
 
 SSH=		@path_ssh@
 
-PREFIX=		@prefix@
-EXEC_PREFIX=	@exec_prefix@
-BINDIR=		@bindir@
-DATADIR=	@datadir@
-MANDIR=		@mandir@
+prefix=		@prefix@
+exec_prefix=	@exec_prefix@
+bindir=		@bindir@
+datadir=	@datadir@
+mandir=		@mandir@
 
 SRCDIR=		@srcdir@
 VPATH=		@srcdir@
@@ -45,20 +45,18 @@ distclean:	allclean
 		- /bin/rm -f Makefile
 
 install:	$(TARGET)
-		mkdir -p -m 755 $(BINDIR)
-		mkdir -p -m 755 $(PREFIX)/share/doc/autossh
-		mkdir -p -m 755 $(DATADIR)/examples/autossh
-		mkdir -p -m 755 $(MANDIR)
-		cp $(TARGET) $(BINDIR)
-		cp CHANGES README $(DATADIR)/doc/autossh
-		cp autossh.host	$(DATADIR)/examples/autossh
-		cp rscreen $(DATADIR)/examples/autossh
-		cp autossh.1 $(MANDIR)/man1
-		chmod 755 $(BINDIR)/$(TARGET)
-		chmod 644 $(DATADIR)/doc/autossh/CHANGES
-		chmod 644 $(DATADIR)/doc/autossh/README
-		chmod 644 $(DATADIR)/examples/autossh/autossh.host 
-		chmod 644 $(DATADIR)/examples/autossh/rscreen
-		chmod 644 $(MANDIR)/man1/autossh.1 
-
-
+		mkdir -p -m 755 $(bindir)
+		mkdir -p -m 755 $(prefix)/share/doc/autossh
+		mkdir -p -m 755 $(datadir)/examples/autossh
+		mkdir -p -m 755 $(mandir)/man1
+		cp $(TARGET) $(bindir)
+		cp CHANGES README $(datadir)/doc/autossh
+		cp autossh.host	$(datadir)/examples/autossh
+		cp rscreen $(datadir)/examples/autossh
+		cp autossh.1 $(mandir)/man1
+		chmod 755 $(bindir)/$(TARGET)
+		chmod 644 $(datadir)/doc/autossh/CHANGES
+		chmod 644 $(datadir)/doc/autossh/README
+		chmod 644 $(datadir)/examples/autossh/autossh.host 
+		chmod 644 $(datadir)/examples/autossh/rscreen
+		chmod 644 $(mandir)/man1/autossh.1 

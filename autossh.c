@@ -81,7 +81,7 @@ extern char *__progname;
 char *__progname;
 #endif
 
-const char *rcsid = "$Id: autossh.c,v 1.74 2006/05/21 03:33:00 harding Exp $";
+const char *rcsid = "$Id: autossh.c,v 1.75 2006/07/13 14:49:53 harding Exp $";
 
 #ifndef SSH_PATH
 #  define SSH_PATH "/usr/bin/ssh"
@@ -449,7 +449,7 @@ main(int argc, char **argv)
 	}
 
 	if (pid_file_name) {
-		pid_file = fopen(pid_file_name, s);
+		pid_file = fopen(pid_file_name, "w");
 		if (!pid_file) {
 			xerrlog(LOG_ERR, "cannot open pid file \"%s\": %s",
 			    pid_file_name, strerror(errno));
