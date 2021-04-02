@@ -17,7 +17,7 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.\" $Id: autossh.1,v 1.20 2006/05/21 03:33:00 harding Exp $
+.\" $Id: autossh.1,v 1.21 2008/03/28 16:58:21 harding Exp $
 .\"
 .Dd Jul 20, 2004
 .Dt AUTOSSH 1
@@ -211,6 +211,9 @@ way to avoid collisions.
 If this variable is set, the logging level is set to to LOG_DEBUG, and
 if the operating system supports it, syslog is set to duplicate log
 entries to stderr.
+.It Ev AUTOSSH_FIRST_POLL
+Specifies the time to wait before the first connection test. Thereafter
+the general poll time is used (see AUTOSSH_POLL below).
 .It Ev AUTOSSH_GATETIME
 Specifies how long ssh must be up before we consider it a successful
 connection. The default is 30 seconds. Note that if AUTOSSH_GATETIME
@@ -224,6 +227,10 @@ so 0-7 with 7 being the chattiest.
 Specifies that
 .Nm
 should use the named log file, rather than syslog.
+.It Ev AUTOSSH_MAXLIFETIME
+Sets the maximum number of seconds that the program should run. Once
+the number of seconds has been passed, the ssh child will be killed
+and the program will exit.
 .It Ev AUTOSSH_MAXSTART
 Specifies how many times ssh should be started. A negative number
 means no limit on the number of times ssh is started. The default
@@ -245,9 +252,6 @@ Specifies the connection poll time in seconds; default is 600 seconds.
 If the poll time is less than twice the network timeouts (default 15
 seconds) the network timeouts will be adjusted downward to 1/2 the
 poll time.
-.It Ev AUTOSSH_FIRST_POLL
-Specifies the time to wait before the first connection test. Thereafter
-the general poll time is used (see AUTOSSH_POLL above).
 .It Ev AUTOSSH_PORT
 Sets the connection monitoring port. Mostly in case ssh appropriates
 -M at some time. But because of this possible use, AUTOSSH_PORT

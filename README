@@ -163,6 +163,8 @@ The following environment variables can be set:
     AUTOSSH_DEBUG	  - sets logging level to LOG_DEBUG, and if
 			    the operating system supports it, sets
 			    syslog to duplicate log entries to stderr.
+    AUTOSSH_FIRST_POLL	  - time to initial poll (default is as 
+			    AUTOSSH_POLL below).
     AUTOSSH_GATETIME      - how long ssh must be up before we consider
 	                    it a successful connection. Default is 30
 			    seconds. If set to 0, then this behaviour
@@ -173,6 +175,9 @@ The following environment variables can be set:
     AUTOSSH_LOGLEVEL	  - log level, they correspond to the levels 
 			    used by syslog; so 0-7 with 7 being the
 			    chattiest.
+    AUTOSSH_MAXLIFETIME   - Sets the maximum number of seconds the process 
+			    should live for before killing off the ssh child 
+			    and exiting.
     AUTOSSH_MAXSTART	  - specifies how many times ssh should be started.
 			    A negative number means no limit on the number 
 			    of times ssh is started. The default value is -1.
@@ -191,7 +196,6 @@ The following environment variables can be set:
 			    network timeouts (default 15 seconds) the 
 			    network timeouts will be adjusted downward 
 			    to 1/2 the poll time.
-    AUTOSSH_FIRST_POLL	  - time to initial poll (default is as above).
     AUTOSSH_PORT	  - set monitor port. Mostly in case ssh
 			    appropriates -M at some time. But because
 			    of this possible use, AUTOSSH_PORT overrides

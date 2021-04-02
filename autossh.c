@@ -4,7 +4,7 @@
  *
  * 	From the example of rstunnel.
  *
- * Copyright (c) Carson Harding, 2002-2006.
+ * Copyright (c) Carson Harding, 2002-2008.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -81,7 +81,7 @@ extern char *__progname;
 char *__progname;
 #endif
 
-const char *rcsid = "$Id: autossh.c,v 1.75 2006/07/13 14:49:53 harding Exp $";
+const char *rcsid = "$Id: autossh.c,v 1.81 2008/04/04 22:29:58 harding Exp $";
 
 #ifndef SSH_PATH
 #  define SSH_PATH "/usr/bin/ssh"
@@ -89,6 +89,7 @@ const char *rcsid = "$Id: autossh.c,v 1.75 2006/07/13 14:49:53 harding Exp $";
 
 #define POLL_TIME	600	/* 10 minutes default */
 #define GATE_TIME	30	/* 30 seconds default */
+#define MAX_LIFETIME	0	/* default max lifetime of forever */
 #define TIMEO_NET	15000	/* poll on accept() and io (msecs) */
 #define MAX_CONN_TRIES	3	/* how many attempts */
 #define MAX_START	(-1)	/* max # of runs; <0 == forever */
@@ -118,10 +119,12 @@ char	*env_port;		/* port spec'd in environment */
 char	*echo_message = "";	/* message to append to echo string */
 char	*pid_file_name;		/* path to pid file */
 int	pid_file_created;	/* we have created pid file */
+time_t	pid_start_time;		/* time autossh process started */
 int	poll_time = POLL_TIME;	/* default connection poll time */
 int	first_poll_time = POLL_TIME; /* initial connection poll time */
 double	gate_time = GATE_TIME;	/* time to "make it out of the gate" */
 int	max_start = MAX_START;  /* how many times to run (default no limit) */
+double 	max_lifetime = MAX_LIFETIME; /* how long can the process/daemon live */
 int	net_timeout = TIMEO_NET; /* timeout on network data */
 char	*ssh_path = SSH_PATH;	/* default path to ssh */
 int	start_count;		/* # of times exec()d ssh */
@@ -169,6 +172,7 @@ void	xerrlog(int level, char *fmt, ...)
 void	doerrlog(int level, char *fmt, va_list ap);
 char	*timestr(void);
 void	sig_catch(int sig);
+int	exceeded_lifetime(void);
 
 void
 usage(int code)
@@ -195,50 +199,53 @@ usage(int code)
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Environment variables are:\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_GATETIME   "
+		    "    AUTOSSH_GATETIME    "
 		    "- how long must an ssh session be established\n"
-		    "                       "
+		    "                        "
 		    "  before we decide it really was established\n"
-		    "                       "
+		    "                        "
 		    "  (in seconds)\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_LOGFILE    "
+		    "    AUTOSSH_LOGFILE     "
 		    "- file to log to (default is to use the syslog\n"
-		    "                       "
+		    "                        "
 		    "  facility)\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_LOGLEVEL   "
+		    "    AUTOSSH_LOGLEVEL    "
 		    "- level of log verbosity\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_MAXSTART   "
+		    "    AUTOSSH_MAXLIFETIME "
+		    "- set the maximum time to live (seconds)\n");
+		fprintf(stderr, 
+		    "    AUTOSSH_MAXSTART    "
 		    "- max times to restart (default is no limit)\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_MESSAGE    "
+		    "    AUTOSSH_MESSAGE     "
 		    "- message to append to echo string (max 64 bytes)\n");
 #if defined(__CYGWIN__)
 		fprintf(stderr, 
-		    "    AUTOSSH_NTSERVICE  "
+		    "    AUTOSSH_NTSERVICE   "
 		    "- tweak some things for running under cygrunsrv\n");
 #endif
 		fprintf(stderr, 
-		    "    AUTOSSH_PATH       "
+		    "    AUTOSSH_PATH        "
 		    "- path to ssh if not default\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_PIDFILE    "
+		    "    AUTOSSH_PIDFILE     "
 		    "- write pid to this file\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_POLL       "
+		    "    AUTOSSH_POLL        "
 		    "- how often to check the connection (seconds)\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_FIRST_POLL "
+		    "    AUTOSSH_FIRST_POLL  "
 		    "- time before first connection check (seconds)\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_PORT       "
+		    "    AUTOSSH_PORT        "
 		    "- port to use for monitor connection\n");
 		fprintf(stderr, 
-		    "    AUTOSSH_DEBUG      "
+		    "    AUTOSSH_DEBUG       "
 		    "- turn logging to maximum verbosity and log to\n"
-		    "                       "
+		    "                        "
 		    "  stderr\n");
 		fprintf(stderr, "\n");
 	}
@@ -603,7 +610,7 @@ get_env_args(void)
 
 	if ((s = getenv("AUTOSSH_MAXSTART")) != NULL) {
 		max_start = (int)strtol(s, &t, 0);
-		if (*s == '\0' || *t != '\0' )
+		if (*s == '\0' || max_start < 0 || *t != '\0')
 			xerrlog(LOG_ERR, "invalid max start number \"%s\"", s);
 	}
 
@@ -619,6 +626,33 @@ get_env_args(void)
 	if ((s = getenv("AUTOSSH_PORT")) != NULL)
 		if (*s != '\0')
 			env_port = s;
+
+	if ((s = getenv("AUTOSSH_MAXLIFETIME")) != NULL) {
+		max_lifetime = (double)strtoul(s, &t, 0);
+		if (*s == '\0' || *t != '\0' )
+			xerrlog(LOG_ERR,
+				"invalid max lifetime \"%s\"", s);
+		/* can't really be < 0, as converted as unsigned long */
+		if (max_lifetime <= 0 )
+			max_lifetime = MAX_LIFETIME;
+		else {
+			if (poll_time > max_lifetime) {
+				errlog( LOG_INFO, 
+					"poll time is greater then lifetime,"
+					" dropping poll time to %.0f", max_lifetime );
+				poll_time = max_lifetime;
+			}
+
+			if (first_poll_time > max_lifetime) {
+				errlog( LOG_INFO, 
+					"first poll time is greater then lifetime,"
+					" dropping first poll time to %.0f", max_lifetime );
+				first_poll_time = max_lifetime;
+			}
+
+			time(&pid_start_time);
+		}
+	}
 
 	if ((s = getenv("AUTOSSH_PIDFILE")) != NULL)
 		if (*s != '\0')
@@ -679,6 +713,8 @@ ssh_run(int sock, char **av)
 	srandom(getpid() ^ tv.tv_usec ^ tv.tv_sec);
 
 	while (max_start < 0 || start_count < max_start) {
+		if (exceeded_lifetime())
+			return;
 		restart_ssh = 0;
 		start_count++;
 		grace_time(start_time);
@@ -726,6 +762,8 @@ ssh_watch(int sock)
 	int	val;
 	static	int	secs_left;
 	int	my_poll_time = first_poll_time;
+	time_t	now;
+	double	secs_to_shutdown;
 
 #if defined(HAVE_SETPROCTITLE)
 	setproctitle("parent of %d (%d)", 
@@ -753,7 +791,15 @@ ssh_watch(int sock)
 			secs_left = alarm(0);
 			if (secs_left == 0)
 				secs_left = my_poll_time;
+
 			my_poll_time = poll_time;
+
+			if (max_lifetime != 0) {
+				time(&now);
+				secs_to_shutdown = max_lifetime - difftime(now,pid_start_time);
+				if (secs_to_shutdown < poll_time)
+					secs_left = secs_to_shutdown;
+			}
 
 			errlog(LOG_DEBUG, 
 			    "set alarm for %d secs", secs_left);
@@ -775,6 +821,11 @@ ssh_watch(int sock)
 				return P_EXIT;
 				break;
 			case SIGALRM:
+				if (exceeded_lifetime()) {
+					ssh_kill();
+					return P_EXIT;
+				}
+
 				if (writep && sock != -1 &&
 				    !conn_test(sock, mhost, writep)) {
 					errlog(LOG_INFO, 
@@ -782,12 +833,46 @@ ssh_watch(int sock)
 					ssh_kill();
 					return P_RESTART;
 				}
+#ifdef TOUCH_PIDFILE
+				/*
+				 * utimes() with a NULL time argument sets
+				 * file access and modification times to
+				 * the current time
+				 */
+				if (pid_file_name && 
+				    utimes(pid_file_name, NULL) != 0) {
+					errlog(LOG_ERR,
+					    "could not touch pid file: %s",
+					    strerror(errno));
+				}
+#endif
 				break;
 			default:
 				break;
 			}
 		}
 	}
+}
+
+/*
+ * Checks to see if we have exceeded our time to live
+ * Returns 1 if we have, 0 if we haven't
+ */
+int
+exceeded_lifetime(void)
+{
+	time_t	now;
+
+	if (max_lifetime > 0 ) {
+		time(&now);
+		if (difftime(now, pid_start_time) >= max_lifetime ) {
+			errlog(LOG_INFO, 
+				"exceeded maximum time to live, shutting down");
+			return 1;
+		}
+	}
+
+	return 0;
 }
 
 /*
@@ -1258,8 +1343,16 @@ conn_send_and_receive(char *rp, char *wp, size_t len,
 				wp    += nwrite;
 			}
 			/* if complete, turn off polling for write */
-			if (wleft == 0)
+			if (wleft == 0) {
 				ntopoll = 1;
+				/* 
+				 * if we are reading and writing to the 
+				 * same fd then we must clear the write bit 
+				 * so that poll doesn't loop tight.
+				 */
+				if (iwr == ird)
+				    pfd[ird].events = POLLIN;
+			}
 		}
 
 		if (pfd[ird].revents & POLLIN || pfd[ird].revents & POLLHUP) {

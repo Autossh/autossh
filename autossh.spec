@@ -1,6 +1,6 @@
 Summary:	Automatically restart SSH sessions and tunnels
 Name:		autossh
-Version:	1.4
+Version:	1.4b
 Release:	1
 License:	Distributable
 Group:		Applications/Networking
@@ -38,6 +38,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_mandir}/man1/*
 
 %changelog
+* Fri Mar 28 2008 Carson Harding <harding@motd.ca>
+- update to 1.4b
+
 * Sat May 20 2006 Carson Harding <harding@motd.ca>
 - update to 1.4 and use autoconf
 

@@ -1,4 +1,12 @@
 
+Version 1.4b
+
+- add AUTOSSH_MAXLIFETIME (patch from Steven Clark)
+- include configure.ac in package
+- fix poll flags so not checking for writable when write done (patch
+  from John Grahor)
+- compile time TOUCH_PIDFILE option to touch pid file on connection test.
+
 Version 1.4a
 
 - fix up pid file generation (Xander Hudson)
