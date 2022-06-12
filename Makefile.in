@@ -1,8 +1,8 @@
-# $Id: Makefile.in,v 1.8 2018/03/18 19:31:02 harding Exp $
+# $Id: Makefile.in,v 1.9 2019/01/05 01:24:52 harding Exp $
 #
 # @configure_input@
 
-VER=		1.4f
+VER=		1.4g
 
 SSH=		@path_ssh@
 
@@ -10,6 +10,7 @@ prefix=		@prefix@
 exec_prefix=	@exec_prefix@
 bindir=		@bindir@
 datadir=	@datadir@
+datarootdir=	@datarootdir@
 mandir=		@mandir@
 
 SRCDIR=		@srcdir@

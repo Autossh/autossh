@@ -17,7 +17,7 @@ Look at autossh.host for an example wrapper script.
 
 Usage
 -----
-	autossh -M <port>[:echo_port] [-f] [SSH OPTIONS]
+	autossh [-M <port>[:echo_port]] [-f] [SSH OPTIONS]
 
 Description
 -----------

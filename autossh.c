@@ -21,7 +21,7 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: autossh.c,v 1.89 2018/03/18 19:27:49 harding Exp $
+ * $Id: autossh.c,v 1.91 2019/01/05 01:23:39 harding Exp $
  *
  */
 
@@ -83,7 +83,7 @@ extern char *__progname;
 char *__progname;
 #endif
 
-const char *rcsid = "$Id: autossh.c,v 1.89 2018/03/18 19:27:49 harding Exp $";
+const char *rcsid = "$Id: autossh.c,v 1.91 2019/01/05 01:23:39 harding Exp $";
 
 #ifndef SSH_PATH
 #  define SSH_PATH "/usr/bin/ssh"
@@ -109,7 +109,7 @@ const char *rcsid = "$Id: autossh.c,v 1.89 2018/03/18 19:27:49 harding Exp $";
 
 #define N_FAST_TRIES    5       /* try this many times fast before slowing */
 
-#define	OPTION_STRING "M:V1246ab:c:e:fgi:kl:m:no:p:qstvw:xyACD:E:F:GI:MKL:NO:PQ:R:S:TW:XY"
+#define	OPTION_STRING "M:V1246ab:c:e:fgi:kl:m:no:p:qstvw:xyACD:E:F:GI:MJKL:NO:PQ:R:S:TW:XY"
 
 int	logtype  = L_SYSLOG;	/* default log to syslog */
 int	loglevel = LOG_INFO;	/* default loglevel */
@@ -182,6 +182,7 @@ void    set_sig_handlers(void);
 void    unset_sig_handlers(void);
 void    sig_catch(int sig);
 int	exceeded_lifetime(void);
+unsigned int	clear_alarm_timer(void);
 
 void
 usage(int code)
@@ -330,10 +331,7 @@ main(int argc, char **argv)
 	/*
 	 * We must at least have a monitor port and a remote host.
 	 */
-	if (env_port) { 
-		if (argc < 2)
-			usage(1);
-	} else if (!writep || argc < 4)
+	if (!writep || argc == optind)
 		usage(1);
 
 	if (logtype & L_SYSLOG)
@@ -663,14 +661,14 @@ get_env_args(void)
 		else {
 			if (poll_time > max_lifetime) {
 				errlog( LOG_INFO, 
-					"poll time is greater then lifetime,"
+					"poll time is greater than lifetime,"
 					" dropping poll time to %.0f", max_lifetime );
 				poll_time = max_lifetime;
 			}
 
 			if (first_poll_time > max_lifetime) {
 				errlog( LOG_INFO, 
-					"first poll time is greater then lifetime,"
+					"first poll time is greater than lifetime,"
 					" dropping first poll time to %.0f", max_lifetime );
 				first_poll_time = max_lifetime;
 			}
@@ -762,6 +760,7 @@ ssh_run(int sock, char **av)
 			set_sig_handlers();
 			retval = ssh_watch(sock);
 			dolongjmp = 0;
+			clear_alarm_timer();
 			unset_sig_handlers();
 			if (retval == P_EXITOK || retval == P_EXITERR)
 				return retval;
@@ -812,7 +811,7 @@ ssh_watch(int sock)
 				return r;
 			}
 
-			secs_left = alarm(0);
+			secs_left = clear_alarm_timer();
 			if (secs_left == 0)
 				secs_left = my_poll_time;
 
@@ -828,8 +827,8 @@ ssh_watch(int sock)
 			errlog(LOG_DEBUG, 
 			    "set alarm for %d secs", secs_left);
 
-			alarm(secs_left);
 			dolongjmp = 1;
+			alarm(secs_left);
 
 			/* In case we were signalled while setting 
 			   all this up */
@@ -854,7 +853,12 @@ ssh_watch(int sock)
 				return P_EXITERR;
 				break;
 			case SIGALRM:
-				if (exceeded_lifetime()) {
+				r = exceeded_lifetime();
+				errlog(LOG_DEBUG, 
+				    "received SIGALRM (end-of-life %d)", r);
+
+				/* exit if user-configured lifetime exceeded */
+				if (r) {
 					ssh_kill();
 					return P_EXITOK;
 				}
@@ -885,6 +889,19 @@ ssh_watch(int sock)
 			}
 		}
 	}
+}
+
+/*
+ * Clear any pending signal timer alarm and return the number of seconds
+ * before it would have gone off. Return 0 if there was no alarm pending.
+ */
+unsigned int 
+clear_alarm_timer(void)
+{
+	unsigned int secs_left = alarm(0);
+	errlog(LOG_DEBUG, 
+	    "clear alarm timer (%d secs left)", secs_left);
+	return secs_left;
 }
 
 /*
@@ -1153,12 +1170,24 @@ set_exit_sig_handler()
 void
 set_sig_handlers(void)
 {
-	struct	sigaction act;
+	struct		sigaction act;
+	sigset_t	blockmask;
 
 	memset(&act, 0, sizeof(act));
 	act.sa_handler = sig_catch;
-	sigemptyset(&act.sa_mask);
 	act.sa_flags = 0;
+
+	/* create mask to ensure sig_catch() processes one signal at-a-time */
+	sigemptyset(&blockmask);
+	sigaddset(&blockmask, SIGTERM);
+	sigaddset(&blockmask, SIGINT);
+	sigaddset(&blockmask, SIGHUP);
+	sigaddset(&blockmask, SIGUSR1);
+	sigaddset(&blockmask, SIGUSR2);
+	sigaddset(&blockmask, SIGCHLD);
+	sigaddset(&blockmask, SIGALRM);
+	sigaddset(&blockmask, SIGPIPE);
+	act.sa_mask = blockmask;
 
 	sigaction(SIGTERM, &act, NULL);
 	sigaction(SIGINT,  &act, NULL);

@@ -1,4 +1,16 @@
 
+Version 1.4g
+- Make sure to clear alarm handler when interrupted by signal
+  (diagnosed by and patch from Jeff Forys). In retrospect this
+  issue was reported by a number of people.
+- Note -M as optional in README, to match usage output and man page. 
+  (Vladimir Panteleev)
+- Add -J to SSH option string (Matt Stancliff)
+- Typo "then"->"than" and add datarootdir to Makefile.in 
+  (Stig-??rjan Smelror)
+- More correct checking that we have a monitor port and remote
+  host. (Vladimir D. Seleznev)
+
 Version 1.4f
 - Change behaviour when ssh child exits on signal. Previously
   if SIGHUP, SIGTERM, or SIGKILL were used, autossh assumed that
