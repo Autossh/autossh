@@ -109,7 +109,7 @@ const char *rcsid = "$Id: autossh.c,v 1.91 2019/01/05 01:23:39 harding Exp $";
 
 #define N_FAST_TRIES    5       /* try this many times fast before slowing */
 
-#define	OPTION_STRING "M:V1246ab:c:e:fgi:kl:m:no:p:qstvw:xyACD:E:F:GI:MJKL:NO:PQ:R:S:TW:XY"
+#define	OPTION_STRING "M:V1246ab:c:e:fgi:kl:m:no:p:qstvw:xyACD:E:F:GI:MJKL:NO:PQ:R:S:TW:XYB:"
 
 int	logtype  = L_SYSLOG;	/* default log to syslog */
 int	loglevel = LOG_INFO;	/* default loglevel */
