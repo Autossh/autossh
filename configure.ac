@@ -132,7 +132,7 @@ AC_CHECK_LIB(socket, connect)
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 AC_CACHE_CHECK([if libc defines __progname], ac_cv_libc_defines___progname, [
-	AC_TRY_LINK([],
+	AC_TRY_LINK([ #include <stdio.h> ],
 		[ extern char *__progname; printf("%s", __progname); ],
 		[ ac_cv_libc_defines___progname="yes" ],
 		[ ac_cv_libc_defines___progname="no" ]
