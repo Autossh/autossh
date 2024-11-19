@@ -188,7 +188,7 @@ void
 usage(int code)
 {
 	fprintf(code ? stderr : stdout,
-	    "usage: %s [-V] [-M monitor_port[:echo_port]] [-f] [SSH_OPTIONS]\n", 
+	    "usage: %s [-V] [-f] -M <monitor_port[:echo_port]> [SSH_OPTIONS]\n", 
 	    __progname);
 	if (code) {
 		fprintf(stderr, "\n");

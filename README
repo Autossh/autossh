@@ -17,7 +17,7 @@ Look at autossh.host for an example wrapper script.
 
 Usage
 -----
-	autossh [-M <port>[:echo_port]] [-f] [SSH OPTIONS]
+	autossh [-V] [-f] -M <monitor_port[:echo_port]> [SSH OPTIONS]
 
 Description
 -----------
@@ -40,9 +40,9 @@ situations where using an echo service may not be possible.
 
 autossh has only three arguments of its own:
 
- -M <port>[:echo_port], to specify the base monitoring port to use, or
-	alternatively, to specify the monitoring port and echo service
-	port to use. 
+ -M &lt;monitor_port[:echo_port]&gt;, to specify the base monitoring port
+	to use, or alternatively, to specify the monitoring port and echo
+	service port to use.
 
 	When no echo service port is specified, this port and the port 
 	immediately above it (port# + 1) should be something nothing 
